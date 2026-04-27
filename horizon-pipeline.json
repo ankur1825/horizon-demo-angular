@@ -1,0 +1,7 @@
+{
+  "projectName": "horizon-demo-angular",
+  "projectType": "Angular",
+  "branch": "main",
+  "containerPort": 80,
+  "healthPath": "/"
+}
