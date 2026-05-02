@@ -1,6 +1,7 @@
 const path = require('path');
 
 const reportDir = process.env.SELENIUM_REPORT_DIR || 'reports/selenium';
+const executablePath = process.env.PLAYWRIGHT_CHROME_EXECUTABLE_PATH || '';
 
 module.exports = {
   testDir: './tests/e2e',
@@ -11,7 +12,8 @@ module.exports = {
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+    launchOptions: executablePath ? { executablePath } : undefined
   },
   reporter: [
     ['list'],
