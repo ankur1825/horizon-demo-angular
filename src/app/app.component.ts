@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -70,6 +70,7 @@ interface Deployment {
             <li><span class="pass"></span> Policy checks passed</li>
             <li><span class="warn"></span> Manual QA signoff pending</li>
           </ul>
+          <p class="api-health">Backend API: <strong data-testid="api-health">{{ apiHealthStatus }}</strong></p>
         </article>
       </section>
 
@@ -338,7 +339,7 @@ interface Deployment {
     }
   `]
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   qaDeployment: Deployment = {
     environment: 'QA',
     version: 'release-2026.05',
@@ -350,6 +351,18 @@ export class AppComponent {
   requester = '';
   suite = 'Smoke';
   submitted = false;
+  apiHealthStatus = 'Checking';
+
+  ngOnInit(): void {
+    fetch('/api/health')
+      .then((response) => response.ok ? response.json() : Promise.reject(response))
+      .then((health) => {
+        this.apiHealthStatus = health.status || 'UP';
+      })
+      .catch(() => {
+        this.apiHealthStatus = 'Unavailable';
+      });
+  }
 
   submitRequest(): void {
     if (!this.requester.trim()) {

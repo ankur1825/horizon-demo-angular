@@ -1,0 +1,10 @@
+[
+  {
+    "qaRequester": "qa.engineer@client.example",
+    "qaSuite": "Smoke"
+  },
+  {
+    "qaRequester": "release.manager@client.example",
+    "qaSuite": "Regression"
+  }
+]

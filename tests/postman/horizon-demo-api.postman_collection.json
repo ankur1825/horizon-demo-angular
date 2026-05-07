@@ -1,0 +1,130 @@
+{
+  "info": {
+    "name": "Horizon Demo Angular API Regression",
+    "description": "Enterprise QA regression checks for the API behind the Angular UI.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health endpoint returns UP",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('service is healthy', () => pm.expect(body.status).to.eql('UP'));",
+              "pm.test('response time is below threshold', () => pm.expect(pm.response.responseTime).to.be.below(Number(pm.environment.get('responseTimeThresholdMs') || 1000)));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Release metadata schema is valid",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/release"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('release has application identity', () => pm.expect(body.application).to.eql('horizon-demo-angular'));",
+              "pm.test('release environment is QA-like', () => pm.expect(['DEV', 'QA', 'STAGE', 'PROD']).to.include(body.environment));",
+              "pm.test('release status is healthy', () => pm.expect(body.status).to.eql('Healthy'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quality gates include required controls",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/quality-gates"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const gateNames = body.gates.map((gate) => gate.name);",
+              "pm.test('required gates are present', () => pm.expect(gateNames).to.include.members(['unit-tests', 'container-scan', 'policy-validation', 'qa-signoff']));",
+              "pm.test('no required gate is blocked', () => pm.expect(body.gates.filter((gate) => gate.required && gate.status === 'BLOCKED')).to.have.length(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "QA signoff accepts valid request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"requester\": \"{{qaRequester}}\", \"suite\": \"{{qaSuite}}\" }"
+        },
+        "url": "{{baseUrl}}/api/signoff"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 201', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('signoff is submitted', () => pm.expect(body.status).to.eql('SUBMITTED'));",
+              "pm.test('requester is echoed', () => pm.expect(body.requester).to.eql(pm.environment.get('qaRequester')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "QA signoff rejects invalid requester",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{ \"requester\": \"not-an-email\", \"suite\": \"Smoke\" }"
+        },
+        "url": "{{baseUrl}}/api/signoff"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status is 400', () => pm.response.to.have.status(400));",
+              "const body = pm.response.json();",
+              "pm.test('error code is explicit', () => pm.expect(body.code).to.eql('INVALID_REQUESTER'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
