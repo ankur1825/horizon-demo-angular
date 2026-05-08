@@ -80,21 +80,102 @@ Key benefits for enterprise clients:
 
 ## Framework Architecture
 
+SonarQube testing in Horizon is a source-code quality and SAST validation workflow. It does not test a running URL like Selenium, Newman, or JMeter. Instead, it checks out the client repository inside the client-controlled Jenkins execution environment, prepares test coverage where possible, runs SonarScanner, and evaluates the configured SonarQube Quality Gate.
+
 ```mermaid
-flowchart LR
-  A["Client Application Repository"] --> B["Horizon Test Devops Pipeline"]
-  B --> C["Jenkins Pipeline Job"]
-  C --> D["Checkout Source Branch"]
-  D --> E["Prepare Coverage"]
-  E --> F["Generate or Read sonar-project.properties"]
-  F --> G["Run SonarScanner"]
-  G --> H["Wait for SonarQube Analysis"]
-  H --> I["Evaluate Quality Gate"]
-  I --> J["Archive Reports"]
-  J --> K["Upload Evidence to S3"]
+flowchart TD
+  A["Client QA / Developer"] --> B["Horizon Frontend"]
+  B --> C["Horizon Backend API"]
+  C --> D["Create or Update Jenkins Test Job"]
+  D --> E["Jenkins Test Devops Pipeline"]
+  E --> F["Validate License and Feature Access"]
+  F --> G["Checkout Client Repository and Branch"]
+  G --> H{"Project Type"}
+  H -- "Angular / Node / WebComponent" --> I["Install Node Dependencies"]
+  I --> J["Run Unit Tests and Generate LCOV if Available"]
+  H -- "Spring Boot / Java" --> K["Run Maven or Gradle Tests"]
+  K --> L["Generate JaCoCo XML if Available"]
+  H -- "Other Supported Stack" --> M["Use Repository sonar-project.properties"]
+  J --> N["Resolve Sonar Project Key"]
+  L --> N
+  M --> N
+  N --> O["Run SonarScanner"]
+  O --> P["SonarQube Server Processes Analysis"]
+  P --> Q["Quality Gate Evaluation"]
+  Q --> R{"Gate Passed?"}
+  R -- "Yes" --> S["Archive Reports and Continue Pipeline"]
+  R -- "No" --> T["Fail Pipeline and Publish Findings"]
+  S --> U["Jenkins Artifacts"]
+  T --> U
+  U --> V["Client S3 Evidence Bucket"]
+  U --> W["Optional SNS / Email Notification"]
 ```
 
-The Horizon platform creates or updates a Jenkins job using the values submitted in the Test Devops Pipeline UI. Jenkins checks out the client repository, prepares coverage where supported, runs SonarScanner, waits for SonarQube to process the report, and then evaluates the Quality Gate.
+### Component Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| Horizon Frontend | Collects project, repository, environment, and SonarQube enablement inputs |
+| Horizon Backend API | Validates request, applies license controls, creates or updates Jenkins job parameters |
+| Jenkins Test Devops Pipeline | Executes checkout, coverage preparation, SonarScanner, quality gate, and evidence publishing |
+| Client Repository | Holds application source, tests, coverage configuration, and optional `sonar-project.properties` |
+| SonarQube Server | Stores analysis results, applies quality profiles, and evaluates Quality Gate policy |
+| Client S3 Bucket | Stores release evidence, summaries, and reports for audit and QA signoff |
+| Notification Channel | Sends success or failure notification when enabled |
+
+### Source-Code Security Boundary
+
+For enterprise clients, source code remains inside the client-controlled execution boundary. Horizon does not require clients to upload source code to Horizon Relevance. In a client-hosted deployment, Jenkins, SonarQube, credentials, artifact buckets, and network routes all run in the client environment.
+
+### SonarQube Data Flow
+
+1. User submits a Test Devops Pipeline request with **SonarQube Code Quality** enabled.
+2. Horizon backend creates or updates a Jenkins job with repository, branch, project type, and evidence settings.
+3. Jenkins clones the requested branch using client-controlled Git credentials.
+4. Jenkins detects the stack and prepares coverage:
+   - Angular/Node/WebComponent: Node dependency install and LCOV generation when supported.
+   - Spring Boot/Maven: Maven test execution and JaCoCo XML generation.
+   - Spring Boot/Gradle: Gradle test execution and JaCoCo XML generation.
+5. Jenkins uses repository-provided `sonar-project.properties` when available; otherwise it generates a sane project key and scanner configuration.
+6. SonarScanner sends metadata, source analysis, and coverage paths to SonarQube.
+7. Jenkins waits for SonarQube Quality Gate status.
+8. If the Quality Gate fails, the pipeline fails and publishes evidence.
+9. If the Quality Gate passes, the pipeline archives results and continues to the next selected test.
+
+### Enterprise Quality Gate Model
+
+The Quality Gate should be configured differently by environment and maturity:
+
+| Environment | Recommended Gate Style | Example |
+| --- | --- | --- |
+| DEV | Developer feedback | Warn on coverage, fail on critical vulnerabilities |
+| QA | Release validation | Fail on blocker/critical issues and major coverage regression |
+| STAGE | Pre-production control | Fail on unresolved vulnerabilities, low coverage, duplicated code |
+| PROD promotion | Governance gate | Require clean Quality Gate or approved waiver |
+
+### Execution Flow Through Horizon Product
+
+```mermaid
+sequenceDiagram
+  participant User as QA / Developer
+  participant UI as Horizon UI
+  participant API as Horizon Backend
+  participant Jenkins as Jenkins
+  participant SQ as SonarQube
+  participant S3 as Client S3 Bucket
+
+  User->>UI: Select Test Devops Pipeline and enable SonarQube
+  UI->>API: Submit repository, branch, project type, and evidence settings
+  API->>Jenkins: Create or update parameterized test job
+  API->>Jenkins: Trigger build
+  Jenkins->>Jenkins: Checkout source branch
+  Jenkins->>Jenkins: Run unit tests and coverage where available
+  Jenkins->>SQ: Submit SonarScanner analysis
+  Jenkins->>SQ: Wait for Quality Gate
+  SQ-->>Jenkins: Quality Gate status
+  Jenkins->>S3: Upload summary and evidence
+  Jenkins-->>User: Build result and report links
+```
 
 ## What SonarQube Validates
 

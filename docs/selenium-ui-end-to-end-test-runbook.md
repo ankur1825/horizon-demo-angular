@@ -1,5 +1,36 @@
 # Selenium UI End-to-End Test Runbook
 
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Purpose](#purpose)
+3. [Scope](#scope)
+4. [Framework Architecture](#framework-architecture)
+5. [Selenium Execution Model](#selenium-execution-model)
+6. [Roles](#roles)
+7. [Preconditions](#preconditions)
+8. [Angular Repo Validation](#angular-repo-validation)
+9. [Phase 1: Submit Devops Pipeline For DEV](#phase-1-submit-devops-pipeline-for-dev)
+10. [Phase 2: Validate DEV Build In Jenkins](#phase-2-validate-dev-build-in-jenkins)
+11. [Phase 3: Validate DEV Deployment](#phase-3-validate-dev-deployment)
+12. [Phase 4: Submit Devops Pipeline For QA](#phase-4-submit-devops-pipeline-for-qa)
+13. [Phase 5: Submit Test Devops Pipeline For Selenium UI](#phase-5-submit-test-devops-pipeline-for-selenium-ui)
+14. [Phase 6: Validate Selenium Execution In Jenkins](#phase-6-validate-selenium-execution-in-jenkins)
+15. [Phase 7: Validate S3 Test Artifacts](#phase-7-validate-s3-test-artifacts)
+16. [Phase 8: Negative Test Scenario](#phase-8-negative-test-scenario)
+17. [Phase 9: Client Demo Script](#phase-9-client-demo-script)
+18. [Acceptance Criteria](#acceptance-criteria)
+19. [Common Issues And Fixes](#common-issues-and-fixes)
+20. [Final Deliverables](#final-deliverables)
+
+## Introduction
+
+Selenium UI testing validates application behavior from the user’s point of view. It opens a real or headless browser, navigates through the deployed application, interacts with fields and buttons, and confirms that critical UI workflows behave as expected.
+
+In the Horizon Relevance AI DevSecOps platform, Selenium UI testing runs through the **Test Devops Pipeline** after the application has already been built, containerized, pushed to ECR, and deployed to a target environment such as DEV or QA. This makes Selenium a true end-to-end validation layer. It confirms not only that the code compiled, but that the deployed application can actually be used by a client user.
+
+For the Horizon Angular demo application, the Selenium-style test implementation uses Playwright-based browser automation. The product still treats this as the Selenium UI Testing quality gate because the enterprise objective is browser workflow validation.
+
 ## Purpose
 
 This runbook validates the Horizon Relevance AI DevSecOps product from an end-client point of view for an Angular application.
@@ -29,6 +60,140 @@ Product URLs:
 - Product UI: `https://horizonrelevance.com/pipeline/`
 - Backend API docs: `https://horizonrelevance.com/pipeline/api/docs`
 - Jenkins: `https://horizonrelevance.com/jenkins/`
+
+## Framework Architecture
+
+Selenium UI testing in Horizon is a post-deployment browser validation workflow. It requires a real deployed application URL because the test must interact with the same UI that a client user would access.
+
+```mermaid
+flowchart TD
+  A["Client QA / Application Engineer"] --> B["Horizon Frontend"]
+  B --> C["Horizon Backend API"]
+  C --> D["Create or Update Jenkins Test Job"]
+  D --> E["Jenkins Test Devops Pipeline"]
+  E --> F["Validate License and Feature Access"]
+  F --> G["Checkout Client Repository and Branch"]
+  G --> H["Resolve Deployed App URL"]
+  H --> I{"Browser Test Framework"}
+  I -- "Playwright / Selenium Script" --> J["Install Test Dependencies"]
+  I -- "Maven Selenium Tests" --> K["Run Maven Browser Tests"]
+  J --> L["Launch Headless Browser"]
+  K --> L
+  L --> M["Navigate to Deployed Application"]
+  M --> N["Execute UI Workflows"]
+  N --> O["Capture Screenshots, Trace, and Reports"]
+  O --> P{"UI Tests Passed?"}
+  P -- "Yes" --> Q["Archive Success Evidence"]
+  P -- "No" --> R["Fail Pipeline and Archive Failure Evidence"]
+  Q --> S["Jenkins Artifacts"]
+  R --> S
+  S --> T["Client S3 Artifact Bucket"]
+  S --> U["Optional SNS / Email Notification"]
+```
+
+### Component Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| Horizon Frontend | Collects repository, branch, deployed app URL, and Selenium enablement |
+| Horizon Backend API | Validates the request, applies licensing rules, creates Jenkins job parameters, and triggers execution |
+| Jenkins Test Devops Pipeline | Checks out repo, installs test dependencies, runs browser tests, and publishes evidence |
+| Client Repository | Stores browser test scripts, selectors, fixtures, and test configuration |
+| Deployed Application | The DEV, QA, or STAGE application URL being tested |
+| Browser Runtime | Headless Chrome, Chromium, or Selenium-compatible browser execution layer |
+| Client S3 Bucket | Stores screenshots, traces, HTML reports, and status evidence |
+
+### Browser Test Data Flow
+
+1. Client engineer deploys the application through the Devops Pipeline.
+2. QA confirms the application has a reachable DEV or QA URL.
+3. QA submits a Test Devops Pipeline request with **Selenium UI Testing** enabled.
+4. Horizon backend creates or updates a Jenkins test job.
+5. Jenkins checks out the selected client repository branch.
+6. Jenkins resolves `TARGET_APP_URL` from the UI input.
+7. Jenkins installs browser test dependencies.
+8. Jenkins launches the headless browser runtime.
+9. Browser tests navigate to the deployed application and execute critical user workflows.
+10. Jenkins archives screenshots, traces, HTML reports, and status files.
+11. Jenkins uploads evidence to the client S3 artifact bucket when configured.
+
+### Enterprise UI Testing Patterns
+
+Enterprise browser testing should focus on high-value user journeys rather than every visual detail.
+
+| Pattern | Purpose | Example |
+| --- | --- | --- |
+| Smoke UI Test | Confirm deployed app opens | Home page loads and title is visible |
+| Navigation Test | Confirm primary routes work | Dashboard, settings, and details pages open |
+| Form Test | Confirm user input and validation | Submit form and validate confirmation |
+| Auth Test | Confirm login/logout behavior | User logs in and session is created |
+| Regression Test | Confirm critical behavior still works | Existing QA signoff flow passes |
+| Negative Test | Confirm validation/error states | Invalid input displays expected error |
+| Visual Evidence | Capture screenshots for audit | Screenshot saved on success/failure |
+
+### Execution Flow Through Horizon Product
+
+```mermaid
+sequenceDiagram
+  participant User as QA Engineer
+  participant UI as Horizon UI
+  participant API as Horizon Backend
+  participant Jenkins as Jenkins
+  participant App as Deployed App
+  participant S3 as Client S3 Bucket
+
+  User->>UI: Enable Selenium UI Testing
+  UI->>API: Submit repo, branch, target app URL, environment
+  API->>Jenkins: Create or update test job
+  API->>Jenkins: Trigger build
+  Jenkins->>Jenkins: Checkout repo and install test dependencies
+  Jenkins->>App: Open app in headless browser
+  App-->>Jenkins: Render UI and respond to user actions
+  Jenkins->>Jenkins: Execute assertions, screenshots, traces
+  Jenkins->>S3: Upload Selenium evidence
+  Jenkins-->>User: Build result and report links
+```
+
+### Evidence Model
+
+The Selenium stage should produce enough evidence for QA signoff and release audit.
+
+| Artifact | Purpose |
+| --- | --- |
+| `reports/selenium/` | Main browser test report directory |
+| Screenshots | Visual proof of tested application state |
+| Trace files | Step-by-step browser execution diagnostics |
+| JUnit XML or equivalent | CI-compatible pass/fail output |
+| HTML report | Human-readable execution report |
+| `status.txt` | Simple stage status marker |
+
+## Selenium Execution Model
+
+The Horizon Test Devops Pipeline supports browser testing for repositories that define an executable browser test command.
+
+For JavaScript and Angular applications, Jenkins looks for `package.json` and a browser test script such as:
+
+```json
+{
+  "scripts": {
+    "test:e2e": "playwright test"
+  }
+}
+```
+
+For Java or Spring Boot repositories with Selenium tests, the browser tests can run through Maven or Gradle, for example:
+
+```bash
+mvn -B -Dtest=*UITest* test
+```
+
+The deployed app URL is passed into the test runtime as:
+
+```text
+TARGET_APP_URL
+```
+
+The test code should read this value instead of hardcoding environment URLs. That allows the same test suite to run against DEV, QA, STAGE, or client-hosted environments.
 
 ## Roles
 
@@ -376,4 +541,3 @@ At the end of the test, the teammate should provide:
   - Jenkins successful build
   - Running QA Angular app
   - Selenium report summary
-

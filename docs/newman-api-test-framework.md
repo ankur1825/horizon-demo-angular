@@ -71,23 +71,111 @@ Key benefits for clients:
 
 ## Framework Architecture
 
-The Newman/API testing flow follows this model:
+Newman/API testing in Horizon is a deployed-service validation workflow. Unlike SonarQube, which analyzes source code, Newman validates API behavior against a real endpoint in DEV, QA, STAGE, or another client environment.
+
+The client owns the application repository, Postman collections, environment files, API credentials, and target endpoints. Horizon orchestrates the execution through the Test Devops Pipeline and publishes evidence for QA and release governance.
 
 ```mermaid
-flowchart LR
-  A["Client Application Repository"] --> B["Horizon Test Devops Pipeline"]
-  B --> C["Jenkins Pipeline Job"]
-  C --> D["Clone Repository"]
-  D --> E["Locate Postman Collection"]
-  E --> F["Run Newman API Tests"]
-  F --> G["Generate Reports"]
-  G --> H["Publish Evidence"]
-  H --> I["QA / Client Review"]
+flowchart TD
+  A["Client QA / API Engineer"] --> B["Horizon Frontend"]
+  B --> C["Horizon Backend API"]
+  C --> D["Create or Update Jenkins Test Job"]
+  D --> E["Jenkins Test Devops Pipeline"]
+  E --> F["Validate License and Feature Access"]
+  F --> G["Checkout Client Repository and Branch"]
+  G --> H["Discover Postman Collection"]
+  H --> I["Resolve Environment File and Data File"]
+  I --> J["Resolve API Base URL"]
+  J --> K{"Authentication Required?"}
+  K -- "No" --> L["Run Newman Collection"]
+  K -- "Yes" --> M["Inject Token / Secret / Environment Variable"]
+  M --> L
+  L --> N["Generate JSON, JUnit, HTML, and Summary Reports"]
+  N --> O{"API Tests Passed?"}
+  O -- "Yes" --> P["Archive Success Evidence"]
+  O -- "No" --> Q["Fail Pipeline and Archive Failure Evidence"]
+  P --> R["Jenkins Artifacts"]
+  Q --> R
+  R --> S["Client S3 Artifact Bucket"]
+  R --> T["Optional SNS / Email Notification"]
 ```
 
-The application repository contains the API test assets. The Horizon product collects the required inputs from the UI, sends them to the backend, creates or updates the Jenkins job, and triggers the Test Devops Pipeline.
+### Component Responsibilities
 
-Jenkins then runs Newman using the selected collection, environment file, API base URL, timeout, and fail-on-error settings.
+| Component | Responsibility |
+| --- | --- |
+| Horizon Frontend | Collects API target, collection path, environment path, timeout, and fail-on-error options |
+| Horizon Backend API | Validates request, applies licensing, creates Jenkins job parameters, and triggers execution |
+| Jenkins Test Devops Pipeline | Clones repo, locates Postman assets, runs Newman, applies pass/fail behavior, publishes evidence |
+| Client Repository | Stores Postman collection, environment files, data files, and optional helper scripts |
+| Target API | The deployed backend, API Gateway, service mesh route, ingress, or Kubernetes service being tested |
+| Client S3 Bucket | Stores API test evidence and reports |
+| Notification Channel | Sends API test success or failure status when enabled |
+
+### API Test Data Flow
+
+1. User selects **Test Devops Pipeline** and enables **Newman API Regression**.
+2. User provides repository URL, branch, API Base URL, collection path, environment file, optional data file, and timeout.
+3. Horizon backend creates or updates a Jenkins job with these parameters.
+4. Jenkins checks out the client repository.
+5. Jenkins locates the Postman collection under the provided path or default `tests/postman/` convention.
+6. Jenkins normalizes the API Base URL so the collection can run against the correct DEV, QA, or STAGE endpoint.
+7. Jenkins runs Newman with JSON, JUnit, and HTML reporters.
+8. Jenkins generates `summary.json` so the result can be consumed by dashboards, audit evidence, or future release gates.
+9. Jenkins archives reports and uploads them to the client S3 artifact bucket when configured.
+
+### Enterprise API Testing Patterns
+
+Enterprise API testing usually covers several kinds of checks:
+
+| Pattern | Purpose | Example |
+| --- | --- | --- |
+| Health Check | Confirm API is reachable | `GET /health` returns `200` |
+| Contract Check | Confirm response shape | Required JSON fields exist |
+| Business Rule Check | Confirm expected behavior | Invalid input returns expected validation error |
+| Auth Check | Confirm security behavior | Unauthenticated request returns `401` |
+| Data-Driven Check | Validate multiple payloads | Use Newman iteration data file |
+| Regression Check | Confirm old behavior still works | Run same collection every release |
+| Environment Check | Confirm QA points to QA dependencies | Environment file uses QA base URL |
+
+### Execution Flow Through Horizon Product
+
+```mermaid
+sequenceDiagram
+  participant User as QA / API Engineer
+  participant UI as Horizon UI
+  participant API as Horizon Backend
+  participant Jenkins as Jenkins
+  participant Target as Target API
+  participant S3 as Client S3 Bucket
+
+  User->>UI: Enable Newman API Regression
+  UI->>API: Submit collection path, API URL, timeout, data file
+  API->>Jenkins: Create or update test job
+  API->>Jenkins: Trigger build
+  Jenkins->>Jenkins: Checkout repo and resolve Postman assets
+  Jenkins->>Target: Execute API requests through Newman
+  Target-->>Jenkins: API responses
+  Jenkins->>Jenkins: Evaluate assertions and generate reports
+  Jenkins->>S3: Upload API test evidence
+  Jenkins-->>User: Build result and report links
+```
+
+### Generated Evidence Model
+
+Newman produces both human-readable and machine-readable output:
+
+| Artifact | Purpose |
+| --- | --- |
+| `reports/newman/results.json` | Full Newman execution output |
+| `reports/newman/results.xml` | JUnit-compatible report for CI evidence |
+| `reports/newman/html/index.html` | Human-readable API test report |
+| `reports/newman/summary.json` | Compact pass/fail summary for dashboards and audit |
+| `reports/newman/status.txt` | Simple pipeline status marker |
+
+### Security and Source-Code Boundary
+
+Clients do not need to share source code or collections with Horizon Relevance. In a client-hosted model, Jenkins runs inside the client environment, uses client Git credentials, calls client APIs, reads client-managed secrets, and stores evidence in the client-owned S3 bucket.
 
 ## Required Inputs
 
