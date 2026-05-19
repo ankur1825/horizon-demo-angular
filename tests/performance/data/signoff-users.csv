@@ -1,0 +1,5 @@
+qaRequester,qaSuite
+qa.engineer@client.example,Smoke
+release.manager@client.example,Regression
+platform.owner@client.example,ProductionReadiness
+security.reviewer@client.example,SecurityReview
