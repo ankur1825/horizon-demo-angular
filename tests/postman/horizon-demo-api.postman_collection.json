@@ -91,7 +91,7 @@
               "pm.test('status is 201', () => pm.response.to.have.status(201));",
               "const body = pm.response.json();",
               "pm.test('signoff is submitted', () => pm.expect(body.status).to.eql('SUBMITTED'));",
-              "pm.test('requester is echoed', () => pm.expect(body.requester).to.eql(pm.environment.get('qaRequester')));"
+              "pm.test('requester is echoed', () => pm.expect(body.requester).to.eql(pm.variables.get('qaRequester')));"
             ]
           }
         }
