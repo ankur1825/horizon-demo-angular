@@ -1,0 +1,13 @@
+{
+  "name": "trivy-angular-vulnerability-test",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "angular": "1.8.2",
+    "lodash": "4.17.15",
+    "axios": "0.21.1",
+    "minimist": "1.2.5",
+    "glob-parent": "5.1.1",
+    "trim-newlines": "3.0.0"
+  }
+}
