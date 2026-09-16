@@ -16,7 +16,7 @@ pipeline {
                     def scannerHome = tool 'sonar-scanner'
                     
                     // 2. Wrap the execution inside your specific SonarQube server environment
-                    withSonarQubeEnv('MySonarServer') {
+                    withSonarQubeEnv('SonarQubeServer') {
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=horizon-demo-angular \
