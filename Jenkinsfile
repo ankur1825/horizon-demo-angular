@@ -1,23 +1,16 @@
 pipeline {
     agent any
-
     stages {
-        stage('SCM') {
-            steps {
-                // Pulls the source code from the configured repository
-                checkout scm
-            }
-        }
-        
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    // Locates the SonarScanner tool configured in Global Tool Configuration
-                    def scannerHome = tool 'sonar-scanner'
+                    // Must match the tool name defined in Phase 2, Step 4
+                    def scannerHome = tool 'sonar-scanner' 
                     
-                    // Wraps the execution with SonarQube environment details (tokens/URL)
-                    withSonarQubeEnv() { 
-                        sh "${scannerHome}/bin/sonar-scanner"
+                    withSonarQubeEnv('SonarQubeServer') {
+                        sh "${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=horizon-demo-angular \
+                        -Dsonar.sources=."
                     }
                 }
             }
